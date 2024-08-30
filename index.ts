@@ -1,4 +1,6 @@
 import { dns } from "bun";
+import createClient from "openapi-fetch";
+import type { paths } from './generated/openapi';
 
 const {
   API_KEY,
@@ -15,14 +17,12 @@ if (typeof HOST !== 'string') {
 
 dns.prefetch(HOST);
 
-const baseUrl = `https://${HOST}`;
-
-const requestInit: RequestInit = {
+const client = createClient<paths>({
+  baseUrl: `https://${HOST}`,
   headers: {
     'X-CMC_PRO_API_KEY': API_KEY,
   },
-};
-
+});
 
 function isObject(item: unknown): item is Record<string, unknown> {
   return  item != null && item.constructor.name === 'Object';
@@ -57,17 +57,20 @@ async function sleep(ms: number) {
 };
 
 async function getTokenIdsChunks() {
-  const idMapUrl = new URL('/v1/cryptocurrency/map', baseUrl);
-  idMapUrl.searchParams.set('aux', 'platform');
-  idMapUrl.searchParams.set('sort', 'cmc_rank');
+  const { response } = await client.GET('/v1/cryptocurrency/map', {
+    params: {
+      query: {
+        aux: 'platform',
+        sort: 'cmc_rank',
+      }
+    }
+  })
 
-  const res = await fetch(idMapUrl, requestInit);
-
-  if (!res.ok) {
+  if (response.status !== 200) {
     throw new Error('Cannot get cryptocurrency ids');
   }
 
-  const idMap = await res.json();
+  const idMap = await response.json();
   const chunkSize = 100;
   const chunks: number[][] = [];
   let counter = 0;
@@ -100,17 +103,20 @@ async function getTokensMetadataMap(ids: number[]): Promise<TokenMetadataMap> {
     throw new Error('Cannot fetch more than 100 tokens at once');
   }
 
-  const url = new URL('/v1/cryptocurrency/info', baseUrl);
-  url.searchParams.set('aux', '');
-  url.searchParams.set('id', ids.join(','));
+  const { response } = await client.GET('/v1/cryptocurrency/info', {
+    params: {
+      query: {
+        aux: '',
+        id: ids.join(','),
+      }
+    }
+  });
 
-  const res = await fetch(url, requestInit);
-
-  if (!res.ok) {
+  if (!response.ok) {
     throw new Error('Cannot get cryptocurrency metadata');
   }
 
-  const metadata = await res.json();
+  const metadata = await response.json();
 
   const tokensMetadataMap: TokenMetadataMap = {};
 
