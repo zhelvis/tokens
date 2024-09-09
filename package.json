@@ -5,13 +5,10 @@
   "type": "module",
   "devDependencies": {
     "@types/bun": "latest",
-    "openapi-typescript": "^7.3.3",
-    "postman2openapi": "^1.2.1"
+    "@zhelvis/cmc": "^1.0.0",
+    "bottleneck": "^2.19.5"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "openapi-fetch": "^0.11.3"
   }
 }

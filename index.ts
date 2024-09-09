@@ -1,10 +1,15 @@
 import { dns } from "bun";
-import createClient from "openapi-fetch";
-import type { paths } from './generated/openapi';
+import {
+  client,
+  metadataV2,
+  coinmarketcapIdMap,
+} from "@zhelvis/cmc";
+import Bottleneck from 'bottleneck';
 
 const {
   API_KEY,
   HOST,
+  REQUESTS_PER_MINUTE,
 } = process.env;
 
 if (typeof API_KEY !== 'string') {
@@ -15,17 +20,26 @@ if (typeof HOST !== 'string') {
   throw new Error('Host is not defined');
 }
 
+if (typeof REQUESTS_PER_MINUTE !== 'string') {
+  throw new Error('Rate limit is not defined');
+}
+
 dns.prefetch(HOST);
 
-const client = createClient<paths>({
+client.setConfig({
   baseUrl: `https://${HOST}`,
   headers: {
     'X-CMC_PRO_API_KEY': API_KEY,
   },
 });
 
+const limiter = new Bottleneck({
+  maxConcurrent: 1,
+  minTime: 1000 / (Number(REQUESTS_PER_MINUTE) / 60),
+});
+
 function isObject(item: unknown): item is Record<string, unknown> {
-  return  item != null && item.constructor.name === 'Object';
+  return item != null && item.constructor.name === 'Object';
 }
 
 
@@ -52,30 +66,26 @@ export function mergeDeep(target: unknown, ...sources: unknown[]) {
   return mergeDeep(target, ...sources);
 }
 
-async function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-};
-
 async function getTokenIdsChunks() {
-  const { response } = await client.GET('/v1/cryptocurrency/map', {
-    params: {
+  const { data, response } = await limiter
+    .schedule(() => coinmarketcapIdMap({
       query: {
         aux: 'platform',
         sort: 'cmc_rank',
-      }
-    }
-  })
+      },
+    }));
 
   if (response.status !== 200) {
     throw new Error('Cannot get cryptocurrency ids');
   }
 
-  const idMap = await response.json();
+  const idMap = data as any;
+
   const chunkSize = 100;
   const chunks: number[][] = [];
   let counter = 0;
 
-  for(const cryptocurrency of idMap.data) {
+  for (const cryptocurrency of idMap.data) {
     // ignore coins
     if (!cryptocurrency.platform) {
       continue;
@@ -92,44 +102,73 @@ async function getTokenIdsChunks() {
   return chunks;
 }
 
-type TokenMetadataMap = {
-  [symbol: string]: {
+type TokenMetadataUrls = {
+  website: string[];
+  technical_doc: string[];
+  explorer: string[];
+  source_code: string[];
+  message_board: string[];
+  chat: string[];
+  announcement: string[];
+  reddit: string[];
+  twitter: string[];
+}
+
+type TokenMetadata = {
+  name: string;
+  logo: string;
+  description: string | null;
+  urls: TokenMetadataUrls;
+  addresses: {
     [platform: string]: string;
   }
-}
+};
+
+type TokenMetadataMap = { [symbol: string]: TokenMetadata };
 
 async function getTokensMetadataMap(ids: number[]): Promise<TokenMetadataMap> {
   if (ids.length > 100) {
     throw new Error('Cannot fetch more than 100 tokens at once');
   }
 
-  const { response } = await client.GET('/v1/cryptocurrency/info', {
-    params: {
+  const { data, response } = await limiter
+    .schedule(() => metadataV2({
       query: {
-        aux: '',
+        aux: 'urls,logo,description',
         id: ids.join(','),
-      }
-    }
-  });
+      },
+    }));
 
   if (!response.ok) {
     throw new Error('Cannot get cryptocurrency metadata');
   }
 
-  const metadata = await response.json();
+  const payload = data as any;
 
   const tokensMetadataMap: TokenMetadataMap = {};
 
-  for (const id in metadata.data){
-    const { symbol } = metadata.data[id];
+  for (const id in payload.data){
+    const {
+      symbol,
+      name,
+      description,
+      logo,
+      urls
+    } = payload.data[id];
 
-    tokensMetadataMap[symbol] = {};
+    tokensMetadataMap[symbol] = {
+      name,
+      description,
+      logo,
+      urls,
+      addresses: {},
+    };
 
-    const contracts = metadata.data[id].contract_address;
+    const contracts = payload.data[id].contract_address;
 
     for (const contract of contracts) {
       const { platform, contract_address } = contract;
-      tokensMetadataMap[symbol][platform.name] = contract_address;
+      tokensMetadataMap[symbol].addresses[platform.name] = contract_address;
     }
   } 
 
@@ -139,13 +178,11 @@ async function getTokensMetadataMap(ids: number[]): Promise<TokenMetadataMap> {
 
 async function main() {
   const idsChunks = await getTokenIdsChunks();
-  const tokensMetadataMap: TokenMetadataMap = {};
-  await sleep(2000);
+  const tokensMetadataMap = {};
 
   for (const chunk of idsChunks) {
     const chunkTokensMetadataMap = await getTokensMetadataMap(chunk);
     mergeDeep(tokensMetadataMap, chunkTokensMetadataMap);
-    await sleep(2000);
   }
 
   await Bun.write('./dist/tokens.json', JSON.stringify(tokensMetadataMap, null, '\t'));
