@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { client, coinmarketcapIdMap, metadataV2 } from "@zhelvis/cmc";
 import Bottleneck from "bottleneck";
 import { Command } from "commander";
@@ -49,7 +50,7 @@ program
 			}),
 		);
 
-		await Bun.write(output, JSON.stringify(tokensMetadataMap, null, "\t"));
+		await fs.promises.writeFile(output, JSON.stringify(tokensMetadataMap, null, "\t"));
 	});
 
 program.parse(process.argv);

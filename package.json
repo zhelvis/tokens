@@ -1,7 +1,7 @@
 {
 	"name": "@zhelvis/tokens",
 	"description": "downloads metadata of well-known tokens in diffrenent networks from CmC API",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"license": "MIT",
 	"author": "Vladimir Zhelvis <zhelvisvladimir@gmail.com>",
 	"bin": {
