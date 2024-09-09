@@ -9,7 +9,7 @@ import { mergeDeep } from "./mergeDeep";
 const program = new Command();
 
 program
-	.name('tokens')
+	.name("tokens")
 	.version(version)
 	.option(
 		"-k, --key <string>",

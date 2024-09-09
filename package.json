@@ -2,12 +2,12 @@
 	"name": "@zhelvis/tokens",
 	"description": "downloads metadata of well-known tokens in diffrenent networks from CmC API",
 	"version": "1.0.1",
-  "license": "MIT",
+	"license": "MIT",
 	"author": "Vladimir Zhelvis <zhelvisvladimir@gmail.com>",
 	"bin": {
 		"tokens": "./dist/index.js"
 	},
-  "files": ["dist"],
+	"files": ["dist"],
 	"type": "module",
 	"devDependencies": {
 		"@biomejs/biome": "^1.8.3",
